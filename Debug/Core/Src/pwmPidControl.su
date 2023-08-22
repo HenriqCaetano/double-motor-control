@@ -1,0 +1,2 @@
+../Core/Src/pwmPidControl.c:7:6:pidInit	32	static
+../Core/Src/pwmPidControl.c:21:7:computePwmValue	32	static
