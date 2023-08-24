@@ -50,6 +50,7 @@
 
 #define STEP_BUFFER_SIZE 10
 #define TIMER_INIT_VALUE 30000 //this way, there is no need to deal with overflow
+#define CCR_LIMIT 999
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -69,15 +70,15 @@ UART_HandleTypeDef huart1;
 int A_Step = 0; //stores encoder pulses
 int B_Step = 0;
 float A_Speed = 0; //speed in pulses / s
-float B_speed = 0;
+float B_Speed = 0;
 float pastTime = 0; //time since application started TODO: remove!
 uint32_t currentTick, lastTick = 0; //stores clock ticks
 
 
 int A_Buffer[STEP_BUFFER_SIZE];
 int B_Buffer[STEP_BUFFER_SIZE];
+float A_Sum = 0, B_Sum =0;
 int i, j;
-float auxSum = 0;
 
 
 //CONTROL VARIABLES
@@ -176,6 +177,8 @@ int main(void)
   //motors initially stopped
   A_MotorStop();
   B_MotorStop();
+  //TIM5->CC1: PWM FOR MOTOR A
+  //TIM5->CCR2 PWM FOR MOTOR B
   TIM5->CCR1 = 0; TIM5->CCR2 = 0; //PWM timer inittialy 0
 
 
@@ -548,8 +551,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 
 		//dealing with different kinds of movement for motor A
 		if(A_SetPoint > 0) A_MotorClockWise();
-
-		//antiClockWise movement TODO: TESTES AQUI!
+		//antiClockWise movement
 		else if(A_SetPoint < 0) A_MotorCounterClockWise();
 		//no movement
 		else {
@@ -557,13 +559,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 			TIM5->CCR1 = 0; //0% dutyCycle
 			A_Duty = 0; //avoids biasing next motor speed
 		}
-
 		//dealing with different kinds of movement for motor B
 		if(B_SetPoint > 0) B_MotorClockWise();
-		//antiClockWise movement TODO: TESTES AQUI!
+		//antiClockWise movement
 		else if(B_SetPoint < 0) B_MotorCounterClockWise();
 		//no movement
-		else {
+		else{
 			B_MotorStop();
 			TIM5->CCR2 = 0; //0% dutyCycle
 			B_Duty = 0; //avoids biasing next motor speed
@@ -572,33 +573,49 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		if(i >= 10) i=0; //creates queue structure in the buffer
 
 		//CONTROLLER
-		stepBuffer[i] = currentStep;
+		A_Buffer[i] = A_Step;
+		B_Buffer[i] = B_Step;
 		i++;
 
-		for(j=0; j< STEP_BUFFER_SIZE; j++) auxSum += stepBuffer[j];
-		auxSum /= STEP_BUFFER_SIZE;
+		for(j=0; j< STEP_BUFFER_SIZE; j++){
+			A_Sum += A_Buffer[j];
+			B_Sum += B_Buffer[j];
+		}
 
-		speedInPulses = auxSum * 100; // current speed in pulses / s
-		duty += computePwmValue(pulsesSetPoint, speedInPulses, &controller); //gets pwm variation in floating point
+		A_Sum /= STEP_BUFFER_SIZE;
+		B_Sum /= STEP_BUFFER_SIZE;
 
-		//considers CCR limits
-		if(duty > 699) duty = 699;
-		else if(duty < 0) duty = 0;
+		// current speed in pulses / s
+		A_Speed = A_Sum * 100;
+		B_Speed = B_Sum * 100;
 
-		//CCR in 699 -> DUTY CYCLE 100%
+		A_Duty += computePwmValue(A_SetPoint, A_Speed, &A_MotorController); //gets pwm variation in floating point
+		B_Duty += computePwmValue(B_SetPoint, B_Speed, &B_MotorController); //gets pwm variation in floating point
+
+		//considers CCR limits for motor A
+		if(A_Duty > CCR_LIMIT) A_Duty = CCR_LIMIT;
+		else if(A_Duty < 0) A_Duty = 0;
+
+		//considers CCR limits for motor B
+		if(B_Duty > CCR_LIMIT) B_Duty = CCR_LIMIT;
+		else if(B_Duty < 0) B_Duty = 0;
+
+		//CCR in 999 -> DUTY CYCLE 100%
 		//CCR in 0 -> DUTY CYCLE 0%
 		//configurable in .ioc
-		TIM1->CCR4 = duty; //updates pwm
+		TIM5->CCR1 = A_Duty; //updates pwm for motor A
+		TIM5->CCR2 = B_Duty; //updates pwm for motor B
 
 //		debug printing
 //		printf("currentStep: %d setPoint: %f\r\n", currentStep, pulsesSetPoint); //encoder step and setPoint
 //		printf("PWM: %ld\r\n", TIM1->CCR4); //pwm register
-		printf("%f %f\n\r", speedInPulses, pastTime); //speed and time formatted for python script (graphic)
+		printf("%f %f\n\r", A_Speed, pastTime); //speed and time formatted for python script (graphic)
 //		printf("%ld\r\n", currentTick - lastTick); //time between interrupts
 //		printf("%f \n\r", auxSum);
 
 		//updates for next iteration
-		auxSum = 0;
+		A_Sum = 0;
+		B_Sum = 0;
 		lastTick = currentTick;
 	}
 }
