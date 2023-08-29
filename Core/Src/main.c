@@ -44,8 +44,8 @@
 //controller defines
 #define MAX_PWM 100
 #define MIN_PWM -100
-#define KP 0.05
-#define KI 10
+#define KP 0.03
+#define KI 5
 #define KD 0
 
 #define STEP_BUFFER_SIZE 10
@@ -71,7 +71,7 @@ int A_Step = 0; //stores encoder pulses
 int B_Step = 0;
 float A_Speed = 0; //speed in pulses / s
 float B_Speed = 0;
-float pastTime = 0; //time since application started TODO: remove!
+float pastTime = 0; //time since application started, used for graphics
 uint32_t currentTick, lastTick = 0; //stores clock ticks
 
 
@@ -162,7 +162,8 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_ALL); //starts PWM timer
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_1); //starts PWM timer
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_2); //starts PWM timer
   HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL); //starts encoder timer for motor 1
   HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL); //starts encoder timer for motor 2
 
@@ -542,11 +543,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		pastTime += (float)(currentTick - lastTick) / 1000;
 
 		/*Testes de velocidade*/
-//		if(pastTime > 25) pulsesSetPoint = 0;
-//		else if(pastTime > 20) pulsesSetPoint = -700;
-//		else if(pastTime > 15) pulsesSetPoint = 0;
-//		else if(pastTime > 10) pulsesSetPoint = -800;
-//		else if(pastTime > 5) pulsesSetPoint = 700;
+
+		if(pastTime > 5) A_SetPoint = 1000;
 
 
 		//dealing with different kinds of movement for motor A
@@ -625,8 +623,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
  * IN B: OFF
  * */
 void A_MotorClockWise(){
-	HAL_GPIO_WritePin(GPIOA, A_IN_1_Pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOA, A_IN_2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, A_IN_1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOF, A_IN_2_Pin, GPIO_PIN_RESET);
 }
 
 /**
@@ -634,8 +632,8 @@ void A_MotorClockWise(){
  * IN B: ON
  * */
 void A_MotorCounterClockWise(){
-	HAL_GPIO_WritePin(GPIOA, A_IN_1_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOA, A_IN_2_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOF, A_IN_1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, A_IN_2_Pin, GPIO_PIN_SET);
 }
 
 /**
@@ -644,14 +642,14 @@ void A_MotorCounterClockWise(){
  * */
 //brakes to GND
 void A_MotorStop(){
-	HAL_GPIO_WritePin(GPIOA, A_IN_1_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOA, A_IN_2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, A_IN_1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, A_IN_2_Pin, GPIO_PIN_RESET);
 }
 
 
 void B_MotorClockWise(){
-	HAL_GPIO_WritePin(GPIOA, B_IN_1_Pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOA, B_IN_2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, B_IN_1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOF, B_IN_2_Pin, GPIO_PIN_RESET);
 }
 
 /**
@@ -659,8 +657,8 @@ void B_MotorClockWise(){
  * IN 2: ON
  * */
 void B_MotorCounterClockWise(){
-	HAL_GPIO_WritePin(GPIOA, B_IN_1_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOA, B_IN_2_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOF, B_IN_1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, B_IN_2_Pin, GPIO_PIN_SET);
 }
 
 /**
@@ -669,8 +667,8 @@ void B_MotorCounterClockWise(){
  * */
 //brakes to GND
 void B_MotorStop(){
-	HAL_GPIO_WritePin(GPIOA, B_IN_1_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOA, B_IN_2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, B_IN_1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOF, B_IN_2_Pin, GPIO_PIN_RESET);
 }
 /* USER CODE END 4 */
 
