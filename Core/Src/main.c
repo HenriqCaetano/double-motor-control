@@ -44,9 +44,13 @@
 //controller defines
 #define MAX_PWM 100
 #define MIN_PWM -100
-#define KP 0.03
-#define KI 5
-#define KD 0
+#define KP_A 0.03
+#define KI_A 20
+#define KD_A 0
+
+#define KP_B 10
+#define KI_B 0
+#define KD_B 0
 
 #define STEP_BUFFER_SIZE 10
 #define TIMER_INIT_VALUE 30000 //this way, there is no need to deal with overflow
@@ -168,8 +172,8 @@ int main(void)
   HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL); //starts encoder timer for motor 2
 
   //same kp, ki, kd for both motors
-  pidInit(&A_MotorController, MIN_PWM, MAX_PWM, KP, KI, KD); //starts PID controller
-  pidInit(&B_MotorController, MIN_PWM, MAX_PWM, KP, KI, KD); //starts PID controller
+  pidInit(&A_MotorController, MIN_PWM, MAX_PWM, KP_A, KI_A, KD_A); //starts PID controller
+  pidInit(&B_MotorController, MIN_PWM, MAX_PWM, KP_B, KI_B, KD_B); //starts PID controller
 
 
   HAL_GPIO_WritePin(GPIOF, ENABLE_A_Pin, GPIO_PIN_SET); //enable A ON (required)
@@ -191,6 +195,8 @@ int main(void)
 
   TIM3->CNT = TIMER_INIT_VALUE;
   TIM4->CNT = TIMER_INIT_VALUE;
+//  A_MotorClockWise();
+//  B_MotorClockWise();
   HAL_TIM_Base_Start_IT(&htim2); //starts interrupt timer
   /* USER CODE END 2 */
 
@@ -535,7 +541,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		currentTick = HAL_GetTick(); //para contar o tempo decorrido (gerar gráfico)
 
 		A_Step = TIM3->CNT - TIMER_INIT_VALUE;
-		B_Step = TIM4->CNT - TIMER_INIT_VALUE;
+		B_Step = (TIM4->CNT - TIMER_INIT_VALUE) * -1; //o motor está de cabeça pra baixo no andador k
 
 		TIM3->CNT = TIMER_INIT_VALUE;
 		TIM4->CNT = TIMER_INIT_VALUE;
@@ -545,7 +551,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		/*Testes de velocidade*/
 
 		if(pastTime > 5) A_SetPoint = 1000;
-
+		if(pastTime > 5) B_SetPoint = 1000;
 
 		//dealing with different kinds of movement for motor A
 		if(A_SetPoint > 0) A_MotorClockWise();
@@ -607,7 +613,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 //		debug printing
 //		printf("currentStep: %d setPoint: %f\r\n", currentStep, pulsesSetPoint); //encoder step and setPoint
 //		printf("PWM: %ld\r\n", TIM1->CCR4); //pwm register
-		printf("%f %f\n\r", A_Speed, pastTime); //speed and time formatted for python script (graphic)
+		printf("%f %f %f\n\r", A_Speed, B_Speed, pastTime); //speed and time formatted for python script (graphic)
 //		printf("%ld\r\n", currentTick - lastTick); //time between interrupts
 //		printf("%f \n\r", auxSum);
 
@@ -647,7 +653,7 @@ void A_MotorStop(){
 }
 
 
-void B_MotorClockWise(){
+void B_MotorCounterClockWise(){
 	HAL_GPIO_WritePin(GPIOF, B_IN_1_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(GPIOF, B_IN_2_Pin, GPIO_PIN_RESET);
 }
@@ -656,7 +662,7 @@ void B_MotorClockWise(){
  * IN 1: OFF
  * IN 2: ON
  * */
-void B_MotorCounterClockWise(){
+void B_MotorClockWise(){
 	HAL_GPIO_WritePin(GPIOF, B_IN_1_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(GPIOF, B_IN_2_Pin, GPIO_PIN_SET);
 }
