@@ -42,13 +42,14 @@
 
 
 //controller defines
-#define MAX_PWM 100
-#define MIN_PWM -100
-#define KP_A 0.03
-#define KI_A 20
+#define MAX_PWM 999
+#define MIN_PWM -999
+
+#define KP_A 0.04
+#define KI_A 0.000001
 #define KD_A 0
 
-#define KP_B 10
+#define KP_B 0.03
 #define KI_B 0
 #define KD_B 0
 
@@ -195,8 +196,7 @@ int main(void)
 
   TIM3->CNT = TIMER_INIT_VALUE;
   TIM4->CNT = TIMER_INIT_VALUE;
-//  A_MotorClockWise();
-//  B_MotorClockWise();
+
   HAL_TIM_Base_Start_IT(&htim2); //starts interrupt timer
   /* USER CODE END 2 */
 
@@ -550,7 +550,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 
 		/*Testes de velocidade*/
 
-		if(pastTime > 5) A_SetPoint = 1000;
+//		if(pastTime > 5) A_SetPoint = 1000;
 		if(pastTime > 5) B_SetPoint = 1000;
 
 		//dealing with different kinds of movement for motor A
@@ -611,9 +611,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		TIM5->CCR2 = B_Duty; //updates pwm for motor B
 
 //		debug printing
-//		printf("currentStep: %d setPoint: %f\r\n", currentStep, pulsesSetPoint); //encoder step and setPoint
+//		printf("stepA: %d stepB: %d\r\n", A_Step, B_Step); //encoder step
 //		printf("PWM: %ld\r\n", TIM1->CCR4); //pwm register
-		printf("%f %f %f\n\r", A_Speed, B_Speed, pastTime); //speed and time formatted for python script (graphic)
+		printf("%f %f %f\n\r", A_Speed, B_Speed, pastTime); //graphic for both motors
+//		printf("%f %f\n\r", A_Speed, pastTime); //graphic for one motor
 //		printf("%ld\r\n", currentTick - lastTick); //time between interrupts
 //		printf("%f \n\r", auxSum);
 

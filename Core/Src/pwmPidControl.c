@@ -27,12 +27,11 @@ float computePwmValue(float setPoint, float feedBackValue, Pid* p){
     p->integralValue += p->error; //update integralError
 
     //calculate pwm output
-    float result = p->kp * p->error; + p->ki * p->integralValue;
+    float result = p->kp * p->error + p->ki * p->integralValue;
 
     //deals with limit values
     if(result > p->max) result = p->max;
     else if(result < p->min) result = p->min;
     return result;
-    //printf("%f\r\n", result);
 }
 
