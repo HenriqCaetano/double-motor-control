@@ -42,14 +42,14 @@
 
 
 //controller defines
-#define MAX_PWM 999
-#define MIN_PWM -999
+#define MAX_PWM 200
+#define MIN_PWM -200
 
 #define KP_A 0.04
-#define KI_A 0.000001
+#define KI_A 0
 #define KD_A 0
 
-#define KP_B 0.03
+#define KP_B 0.04
 #define KI_B 0
 #define KD_B 0
 
@@ -183,6 +183,8 @@ int main(void)
   //motors initially stopped
   A_MotorStop();
   B_MotorStop();
+//  A_MotorClockWise();
+//  B_MotorClockWise();
   //TIM5->CC1: PWM FOR MOTOR A
   //TIM5->CCR2 PWM FOR MOTOR B
   TIM5->CCR1 = 0; TIM5->CCR2 = 0; //PWM timer inittialy 0
@@ -541,7 +543,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		currentTick = HAL_GetTick(); //para contar o tempo decorrido (gerar gráfico)
 
 		A_Step = TIM3->CNT - TIMER_INIT_VALUE;
-		B_Step = (TIM4->CNT - TIMER_INIT_VALUE) * -1; //o motor está de cabeça pra baixo no andador k
+		B_Step = (TIM4->CNT - TIMER_INIT_VALUE) * -1; //o motor está de cabeça pra baixo no andador
 
 		TIM3->CNT = TIMER_INIT_VALUE;
 		TIM4->CNT = TIMER_INIT_VALUE;
@@ -549,9 +551,27 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		pastTime += (float)(currentTick - lastTick) / 1000;
 
 		/*Testes de velocidade*/
+		if(pastTime > 45){
+			A_SetPoint = 2000;
+			B_SetPoint = 2000;
+		}
+		else if(pastTime > 35){
+			A_SetPoint = -2000;
+			B_SetPoint = -2000;
+		}
+		else if(pastTime > 25){
+			A_SetPoint = 0;
+			B_SetPoint = 0;
+		}
+		else if(pastTime > 15){
+			A_SetPoint = -2000;
+			B_SetPoint = -2000;
+		}
+		else if(pastTime > 5){
+			A_SetPoint = 2000;
+			B_SetPoint = 2000;
+		}
 
-//		if(pastTime > 5) A_SetPoint = 1000;
-		if(pastTime > 5) B_SetPoint = 1000;
 
 		//dealing with different kinds of movement for motor A
 		if(A_SetPoint > 0) A_MotorClockWise();
