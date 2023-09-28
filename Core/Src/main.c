@@ -32,30 +32,30 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ONE_LAP 360 //360 degrees in one lap
-#define PPR 1024 //encoder resolution in pulses per revolution
-#define MOTOR_MAX_PULSES 70 //encoder pulses when motor @ 24V
-
-#define MILISECONDS_TO_SECONDS 0.001 //conversion
-#define RPM_TO_DEGREES_PER_SECOND 6 //conversion
-#define HIGH_LEVEL_INPUT_TO_PWM_PERCENTAGE 1/127
 
 
-//controller defines
+//definições dos controles
+
+//maiores e menores mudanças no PWM
 #define MAX_PWM 200
 #define MIN_PWM -200
 
+
+//Parametros para o motor A (podem ser ajustados)
 #define KP_A 0.04
-#define KI_A 0
+#define KI_A 0.00001
 #define KD_A 0
 
+//parametros para o motor B (podem ser ajustados)
 #define KP_B 0.04
-#define KI_B 0
+#define KI_B 0.00001
 #define KD_B 0
 
+//valores utilizados no código
 #define STEP_BUFFER_SIZE 10
-#define TIMER_INIT_VALUE 30000 //this way, there is no need to deal with overflow
+#define TIMER_INIT_VALUE 30000 //para eviar lidar com overflow
 #define CCR_LIMIT 999
+#define DELTA_T 0.01 //intervalo entre interrupções
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -72,26 +72,34 @@ TIM_HandleTypeDef htim5;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-int A_Step = 0; //stores encoder pulses
+//passo de cada encoder: Como está em modo x4 (.ioc), um ciclo de pulsos equivale a aumentar o contador em 4
+int A_Step = 0;
 int B_Step = 0;
-float A_Speed = 0; //speed in pulses / s
+//velocidade em pulsos/s
+float A_Speed = 0;
 float B_Speed = 0;
-float pastTime = 0; //time since application started, used for graphics
-uint32_t currentTick, lastTick = 0; //stores clock ticks
+//tempo desde o início da aplicação, usado para gerar gráficos
+float pastTime = 0;
+//contagem dos ticks do clock
+uint32_t currentTick, lastTick = 0;
 
-
+//buffers para atuar como filtro média móvel
 int A_Buffer[STEP_BUFFER_SIZE];
 int B_Buffer[STEP_BUFFER_SIZE];
+//variáveis usadas na interrupção
 float A_Sum = 0, B_Sum =0;
 int i, j;
 
 
-//CONTROL VARIABLES
+//variáveis de controle
 Pid A_MotorController;
 Pid B_MotorController;
-float A_Duty = 0; //for floating point operations
+//para receber valores float e não acontecer perdas de valores decimais
+float A_Duty = 0;
 float B_Duty = 0;
-float A_SetPoint = 0; //setPoint in pulses/s
+//velocidades alvos definidas pelo alto nível
+//TODO: realizar integração com alto nível obtendo estas velocidades
+float A_SetPoint = 0;
 float B_SetPoint = 0;
 /* USER CODE END PV */
 
@@ -105,22 +113,23 @@ static void MX_TIM5_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
-//for data transmission using FTDI, requires USART 1 enabled
+//Para transmitir dados usando uma FTDI e putty. Precisa do UART1 ligado
 int _write(int fd, char* ptr, int len) {
     HAL_UART_Transmit(&huart1, (uint8_t *) ptr, len, HAL_MAX_DELAY);
     return len;
 }
 
-// driver logic config so motor goes clockwise
+// configuração lógica do driver para que o motor A gire no sentido horário
 void A_MotorClockWise();
 
-// driver logic config so motor goes counter-clockwise
+// configuração lógica do driver para que o motor A gire no sentido anti-horário
 void A_MotorCounterClockWise();
 
-// driver logic config so motor stops
+// configuração lógica do driver para que o motor A não gire
 void A_MotorStop();
 
-//same for motor B
+//análogo para o motor B
+//a lógica dentro da função é invertida pois o motor está de cabeça para baixo no andador
 void B_MotorClockWise();
 void B_MotorCounterClockWise();
 void B_MotorStop();
@@ -167,39 +176,45 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_1); //starts PWM timer
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_2); //starts PWM timer
-  HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL); //starts encoder timer for motor 1
-  HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL); //starts encoder timer for motor 2
+  //instancia dois canais de PWM do timer 1
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_1); //motor A
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_2); //motor B
 
-  //same kp, ki, kd for both motors
-  pidInit(&A_MotorController, MIN_PWM, MAX_PWM, KP_A, KI_A, KD_A); //starts PID controller
-  pidInit(&B_MotorController, MIN_PWM, MAX_PWM, KP_B, KI_B, KD_B); //starts PID controller
+  //instancia os encoders para os motores
+  HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL); //motor A
+  HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL); //motor B
 
+  //instancia os controladores PID de cada motor
+  pidInit(&A_MotorController, MIN_PWM, MAX_PWM, KP_A, KI_A, KD_A); //motor A
+  pidInit(&B_MotorController, MIN_PWM, MAX_PWM, KP_B, KI_B, KD_B); //motor B
 
-  HAL_GPIO_WritePin(GPIOF, ENABLE_A_Pin, GPIO_PIN_SET); //enable A ON (required)
-  HAL_GPIO_WritePin(GPIOF, ENABLE_B_Pin, GPIO_PIN_SET); //enable B ON (required)
+  //mantém os pinos de enable ligados (condição necessária para o driver)
+  HAL_GPIO_WritePin(GPIOF, ENABLE_A_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOF, ENABLE_B_Pin, GPIO_PIN_SET);
 
-  //motors initially stopped
+  //motores inicialmente parados (questão de segurança)
   A_MotorStop();
   B_MotorStop();
-//  A_MotorClockWise();
-//  B_MotorClockWise();
-  //TIM5->CC1: PWM FOR MOTOR A
-  //TIM5->CCR2 PWM FOR MOTOR B
-  TIM5->CCR1 = 0; TIM5->CCR2 = 0; //PWM timer inittialy 0
+  //TIM5->CC1: PWM PARA MOTOR A
+  //TIM5->CCR2 PWM PARA MOTOR B
+  TIM5->CCR1 = 0; TIM5->CCR2 = 0; //dutyCycle inicialmente em 0%
 
 
+  //inicializa os buffers com 0
   for(i= 0; i< STEP_BUFFER_SIZE; i++){
 	  A_Buffer[i] = 0;
 	  B_Buffer[i] = 0;
   }
   i=0;
 
+  //mantém os registradores dos encoders em um valor diferente de zero
+  //para não lidar com overflow
   TIM3->CNT = TIMER_INIT_VALUE;
   TIM4->CNT = TIMER_INIT_VALUE;
 
-  HAL_TIM_Base_Start_IT(&htim2); //starts interrupt timer
+  //inicia a interrupção, é chamada a cada 10 ms. Configurável no .ioc
+  //chama a função HAL_TIM_PeriodElapsedCallback
+  HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -540,67 +555,71 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 	if(htim == &htim2){
 
-		currentTick = HAL_GetTick(); //para contar o tempo decorrido (gerar gráfico)
+		//TODO: integração com o alto nível! Atualizar o setPoint em tempo real
 
+//		currentTick = HAL_GetTick(); //para contar o tempo decorrido (gerar gráfico  com o script python)
+
+		//obtém quanto cada encoder andou
 		A_Step = TIM3->CNT - TIMER_INIT_VALUE;
-		B_Step = (TIM4->CNT - TIMER_INIT_VALUE) * -1; //o motor está de cabeça pra baixo no andador
+		B_Step = (TIM4->CNT - TIMER_INIT_VALUE) * -1; //o motor está de cabeça para baixo no andador
 
 		TIM3->CNT = TIMER_INIT_VALUE;
 		TIM4->CNT = TIMER_INIT_VALUE;
 
-		pastTime += (float)(currentTick - lastTick) / 1000;
+//		pastTime += (float)(currentTick - lastTick) / 1000; //para gerar gráficos  com o script python
 
-		/*Testes de velocidade*/
-		if(pastTime > 45){
-			A_SetPoint = 2000;
-			B_SetPoint = 2000;
-		}
-		else if(pastTime > 35){
-			A_SetPoint = -2000;
-			B_SetPoint = -2000;
-		}
-		else if(pastTime > 25){
-			A_SetPoint = 0;
-			B_SetPoint = 0;
-		}
-		else if(pastTime > 15){
-			A_SetPoint = -2000;
-			B_SetPoint = -2000;
-		}
-		else if(pastTime > 5){
-			A_SetPoint = 2000;
-			B_SetPoint = 2000;
-		}
+//		/*Testes de velocidade*/
+
+//		if(pastTime > 45){
+//			A_SetPoint = 2000;
+//			B_SetPoint = 2000;
+//		}
+//		else if(pastTime > 35){
+//			A_SetPoint = -2000;
+//			B_SetPoint = -2000;
+//		}
+//		else if(pastTime > 25){
+//			A_SetPoint = 0;
+//			B_SetPoint = 0;
+//		}
+//		else if(pastTime > 15){
+//			A_SetPoint = -2000;
+//			B_SetPoint = -2000;
+//		}
+//		else if(pastTime > 5){
+//			A_SetPoint = 2000;
+//			B_SetPoint = 2000;
+//		}
 
 
-		//dealing with different kinds of movement for motor A
+		/*diferentes tipos de movimento para motor A */
+		//horário
 		if(A_SetPoint > 0) A_MotorClockWise();
-		//antiClockWise movement
+		//anti-horário
 		else if(A_SetPoint < 0) A_MotorCounterClockWise();
-		//no movement
+		//parado
 		else {
 			A_MotorStop();
 			TIM5->CCR1 = 0; //0% dutyCycle
-			A_Duty = 0; //avoids biasing next motor speed
+			A_Duty = 0; //evita enviesar a próxima velocidade
 		}
-		//dealing with different kinds of movement for motor B
+		//análogo para o motor B
 		if(B_SetPoint > 0) B_MotorClockWise();
-		//antiClockWise movement
 		else if(B_SetPoint < 0) B_MotorCounterClockWise();
-		//no movement
 		else{
 			B_MotorStop();
-			TIM5->CCR2 = 0; //0% dutyCycle
-			B_Duty = 0; //avoids biasing next motor speed
+			TIM5->CCR2 = 0;
+			B_Duty = 0;
 		}
 
-		if(i >= 10) i=0; //creates queue structure in the buffer
+		if(i >= 10) i=0; //cria estrutura de fila no buffer
 
-		//CONTROLLER
+		//atualiza o buffer de velocidade (atua como filtro média móvel)
 		A_Buffer[i] = A_Step;
 		B_Buffer[i] = B_Step;
 		i++;
 
+		//obtém a velocidade média de cada buffer
 		for(j=0; j< STEP_BUFFER_SIZE; j++){
 			A_Sum += A_Buffer[j];
 			B_Sum += B_Buffer[j];
@@ -609,39 +628,40 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 		A_Sum /= STEP_BUFFER_SIZE;
 		B_Sum /= STEP_BUFFER_SIZE;
 
-		// current speed in pulses / s
-		A_Speed = A_Sum * 100;
-		B_Speed = B_Sum * 100;
 
-		A_Duty += computePwmValue(A_SetPoint, A_Speed, &A_MotorController); //gets pwm variation in floating point
-		B_Duty += computePwmValue(B_SetPoint, B_Speed, &B_MotorController); //gets pwm variation in floating point
+		// velocidade atual em pulsos/s
+		A_Speed = A_Sum / DELTA_T;
+		B_Speed = B_Sum / DELTA_T;
 
-		//considers CCR limits for motor A
+		//obtém variação no PWM em ponto flutuante
+		A_Duty += computePwmValue(A_SetPoint, A_Speed, &A_MotorController);
+		B_Duty += computePwmValue(B_SetPoint, B_Speed, &B_MotorController);
+
+		//considera os limites do CCR para os motores
 		if(A_Duty > CCR_LIMIT) A_Duty = CCR_LIMIT;
 		else if(A_Duty < 0) A_Duty = 0;
 
-		//considers CCR limits for motor B
 		if(B_Duty > CCR_LIMIT) B_Duty = CCR_LIMIT;
 		else if(B_Duty < 0) B_Duty = 0;
 
-		//CCR in 999 -> DUTY CYCLE 100%
-		//CCR in 0 -> DUTY CYCLE 0%
-		//configurable in .ioc
-		TIM5->CCR1 = A_Duty; //updates pwm for motor A
-		TIM5->CCR2 = B_Duty; //updates pwm for motor B
+		//CCR em CCR_LIMIT -> DUTY CYCLE 100%
+		//CCR em 0 -> DUTY CYCLE 0%
+		//configurável no .ioc
 
-//		debug printing
+		//atualiza pwm enviado ao driver
+		TIM5->CCR1 = A_Duty;
+		TIM5->CCR2 = B_Duty;
+
+		/* debug printing */
 //		printf("stepA: %d stepB: %d\r\n", A_Step, B_Step); //encoder step
 //		printf("PWM: %ld\r\n", TIM1->CCR4); //pwm register
-		printf("%f %f %f\n\r", A_Speed, B_Speed, pastTime); //graphic for both motors
-//		printf("%f %f\n\r", A_Speed, pastTime); //graphic for one motor
+//		printf("%f %f %f\n\r", A_Speed, B_Speed, pastTime); //graphic for both motors
 //		printf("%ld\r\n", currentTick - lastTick); //time between interrupts
-//		printf("%f \n\r", auxSum);
 
-		//updates for next iteration
+		//atualizações para a próxima iteração
 		A_Sum = 0;
 		B_Sum = 0;
-		lastTick = currentTick;
+		//lastTick = currentTick; //para gerar gráficos com o script python
 	}
 }
 

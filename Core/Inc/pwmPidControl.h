@@ -11,6 +11,7 @@ struct pid{
     float min /*! Miniumum manipulated value */;
     float error /*! Error value */;
     float integralValue /*! Integrator value */;
+    float lastError /*Diferential value*/;
 };
 
 void pidInit(Pid* p,float minimalPwm, float maximumPwm, float kp, float ki, float kd);
