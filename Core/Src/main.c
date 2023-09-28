@@ -666,8 +666,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim){
 }
 
 /**
- * IN A: ON
- * IN B: OFF
+ * AIN1: ON
+ * AIN2: OFF
  * */
 void A_MotorClockWise(){
 	HAL_GPIO_WritePin(GPIOF, A_IN_1_Pin, GPIO_PIN_SET);
@@ -675,8 +675,8 @@ void A_MotorClockWise(){
 }
 
 /**
- * IN A: OFF
- * IN B: ON
+ * AIN1: OFF
+ * AIN2: ON
  * */
 void A_MotorCounterClockWise(){
 	HAL_GPIO_WritePin(GPIOF, A_IN_1_Pin, GPIO_PIN_RESET);
@@ -684,8 +684,8 @@ void A_MotorCounterClockWise(){
 }
 
 /**
- * IN A: OFF
- * IN B: OFF
+ * AIN1: OFF
+ * AIN2: OFF
  * */
 //brakes to GND
 void A_MotorStop(){
@@ -699,19 +699,13 @@ void B_MotorCounterClockWise(){
 	HAL_GPIO_WritePin(GPIOF, B_IN_2_Pin, GPIO_PIN_RESET);
 }
 
-/**
- * IN 1: OFF
- * IN 2: ON
- * */
+
 void B_MotorClockWise(){
 	HAL_GPIO_WritePin(GPIOF, B_IN_1_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(GPIOF, B_IN_2_Pin, GPIO_PIN_SET);
 }
 
-/**
- * IN A: OFF
- * IN B: OFF
- * */
+
 //brakes to GND
 void B_MotorStop(){
 	HAL_GPIO_WritePin(GPIOF, B_IN_1_Pin, GPIO_PIN_RESET);
